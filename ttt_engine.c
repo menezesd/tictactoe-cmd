@@ -15,12 +15,12 @@ static_assert(sizeof(uint16_t) * 8 >= 9, "bitfield needs at least 9 bits");
 
 // ------------------------- Bit utilities -------------------------
 
-static inline int ctz32(uint32_t x) {
+static inline int ctz32(uint32_t value) {
 #if defined(__GNUC__) || defined(__clang__)
-    return __builtin_ctz(x);
+    return __builtin_ctz(value);
 #else
     int i = 0;
-    while ((x & 1u) == 0u) { x >>= 1; ++i; }
+    while ((value & 1u) == 0u) { value >>= 1; ++i; }
     return i;
 #endif
 }
@@ -33,9 +33,9 @@ static const uint16_t WINS[8] = {
     0421u, 0124u           // diags
 };
 
-bool ttt_is_win_bits(uint16_t b) {
+bool ttt_is_win_bits(uint16_t bits) {
     for (size_t i = 0; i < sizeof WINS / sizeof WINS[0]; ++i)
-        if ((b & WINS[i]) == WINS[i]) return true;
+        if ((bits & WINS[i]) == WINS[i]) return true;
     return false;
 }
 
@@ -58,19 +58,19 @@ static inline uint16_t remap9(uint16_t bits, const uint8_t map[9]) {
     return out;
 }
 
-static inline Board remap_board(Board b, const uint8_t map[9]) {
-    uint16_t x = remap9(ttt_bits_x(b), map);
-    uint16_t o = remap9(ttt_bits_o(b), map);
-    return (Board)((Board)x | ((Board)o << 9) | ((Board)ttt_side_to_move(b) << 18));
+static inline Board remap_board(Board board, const uint8_t map[9]) {
+    uint16_t x = remap9(ttt_bits_x(board), map);
+    uint16_t o = remap9(ttt_bits_o(board), map);
+    return (Board)((Board)x | ((Board)o << 9) | ((Board)ttt_side_to_move(board) << 18));
 }
 
-static inline Board rotate90(Board b)  { return remap_board(b, R90); }
-static inline Board reflect_h(Board b) { return remap_board(b, RH ); }
+static inline Board rotate90(Board board)  { return remap_board(board, R90); }
+static inline Board reflect_h(Board board) { return remap_board(board, RH ); }
 
 // Canonical representative under D4 (rotations + reflection).
-static inline Board canonical(Board b) {
-    Board best = b;
-    Board t = b;
+static inline Board canonical(Board board) {
+    Board best = board;
+    Board t = board;
     for (int r = 0; r < 4; ++r) {
         if (t < best) best = t;
         Board tr = reflect_h(t);
@@ -83,20 +83,20 @@ static inline Board canonical(Board b) {
 // ------------------------- Quick tactics (win/block) -------------------------
 
 // Return a square index for immediate win, otherwise immediate block, else -1.
-static int find_immediate(uint16_t me, uint16_t opp) {
-    uint16_t empt = (uint16_t)(~(me | opp) & FULL9);
+static int find_immediate(uint16_t me_bits, uint16_t opponent_bits) {
+    uint16_t empty_squares = (uint16_t)(~(me_bits | opponent_bits) & FULL9);
     // Win now
     for (size_t i = 0; i < sizeof WINS / sizeof WINS[0]; ++i) {
         uint16_t w = WINS[i];
-        uint16_t need = (uint16_t)(w & ~me);
-        if (need && (need & (uint16_t)(need - 1u)) == 0u && (need & empt))
+        uint16_t need = (uint16_t)(w & ~me_bits);
+        if (need && (need & (uint16_t)(need - 1u)) == 0u && (need & empty_squares))
             return ctz32(need);
     }
     // Block opponent
     for (size_t i = 0; i < sizeof WINS / sizeof WINS[0]; ++i) {
         uint16_t w = WINS[i];
-        uint16_t need = (uint16_t)(w & ~opp);
-        if (need && (need & (uint16_t)(need - 1u)) == 0u && (need & empt))
+        uint16_t need = (uint16_t)(w & ~opponent_bits);
+        if (need && (need & (uint16_t)(need - 1u)) == 0u && (need & empty_squares))
             return ctz32(need);
     }
     return -1;
@@ -110,9 +110,9 @@ typedef struct { uint8_t seen; int8_t score; } TTEntry;
 #define TT_SIZE (1u << 19)
 static alignas(64) TTEntry TT[TT_SIZE];
 
-static inline uint32_t key_from(Board b) {
+static inline uint32_t key_from(Board board) {
     // Use canonical board, mask into table size (power of two)
-    return (uint32_t)canonical(b) & (TT_SIZE - 1u);
+    return (uint32_t)canonical(board) & (TT_SIZE - 1u);
 }
 
 void ttt_reset_cache(void) {
@@ -129,63 +129,63 @@ static const int ORDER[9] = { 4, 0, 2, 6, 8, 1, 3, 5, 7 };
 static inline ttt_score win_in(int ply)  { return  TTT_WIN  - ply; }
 static inline ttt_score lose_in(int ply) { return  TTT_LOSS + ply; }
 
-static ttt_score search(Board b, ttt_score alpha, ttt_score beta, int ply) {
-    TTEntry *e = &TT[key_from(b)];
-    if (e->seen) return e->score;
+static ttt_score search(Board board, ttt_score alpha, ttt_score beta, int ply) {
+    TTEntry *entry = &TT[key_from(board)];
+    if (entry->seen) return entry->score;
 
     // Terminal check: score is from side-to-move POV
-    ttt_score ts;
-    if (ttt_is_terminal(b, &ts)) { e->seen = 1u; e->score = (int8_t)ts; return ts; }
+    ttt_score terminal_score;
+    if (ttt_is_terminal(board, &terminal_score)) { entry->seen = 1u; entry->score = (int8_t)terminal_score; return terminal_score; }
 
     // Identify "me" and "opp" bitboards for current mover
-    uint16_t me  = (ttt_side_to_move(b) == TTT_X) ? ttt_bits_x(b) : ttt_bits_o(b);
-    uint16_t opp = (ttt_side_to_move(b) == TTT_X) ? ttt_bits_o(b) : ttt_bits_x(b);
+    uint16_t me_bits  = (ttt_side_to_move(board) == TTT_X) ? ttt_bits_x(board) : ttt_bits_o(board);
+    uint16_t opponent_bits = (ttt_side_to_move(board) == TTT_X) ? ttt_bits_o(board) : ttt_bits_x(board);
 
     // Immediate tactic shortcut (win or block)
-    int imm = find_immediate(me, opp);
-    if (imm >= 0) {
-        Board nb = ttt_apply(b, imm);
+    int immediate_move = find_immediate(me_bits, opponent_bits);
+    if (immediate_move >= 0) {
+        Board new_board = ttt_apply(board, immediate_move);
         // If this creates a win for the mover now, return quick mate score.
-        ttt_score s = ttt_is_win_bits((ttt_side_to_move(b) == TTT_X) ? ttt_bits_x(nb) : ttt_bits_o(nb))
+        ttt_score score = ttt_is_win_bits((ttt_side_to_move(board) == TTT_X) ? ttt_bits_x(new_board) : ttt_bits_o(new_board))
                       ? win_in(ply)
-                      : -(search(nb, -beta, -alpha, ply + 1));
-        e->seen = 1u; e->score = (int8_t)s;
-        return s;
+                      : -(search(new_board, -beta, -alpha, ply + 1));
+        entry->seen = 1u; entry->score = (int8_t)score;
+        return score;
     }
 
     // Generate moves in a good order
-    uint16_t empt = (uint16_t)(~ttt_bits_occ(b) & FULL9);
+    uint16_t empty_squares = (uint16_t)(~ttt_bits_occ(board) & FULL9);
     ttt_score a = alpha;
 
     for (int k = 0; k < 9; ++k) {
-        int sq = ORDER[k];
-        if ((empt & (1u << sq)) == 0u) continue;
+        int square = ORDER[k];
+        if ((empty_squares & (1u << square)) == 0u) continue;
 
-        Board nb = ttt_apply(b, sq);
+        Board new_board = ttt_apply(board, square);
 
         // Quick win check after the move
-        if (ttt_is_win_bits((ttt_side_to_move(b) == TTT_X) ? ttt_bits_x(nb) : ttt_bits_o(nb))) {
-            ttt_score s = win_in(ply);
-            if (s > a) a = s;
-            e->seen = 1u; e->score = (int8_t)a;
+        if (ttt_is_win_bits((ttt_side_to_move(board) == TTT_X) ? ttt_bits_x(new_board) : ttt_bits_o(new_board))) {
+            ttt_score score = win_in(ply);
+            if (score > a) a = score;
+            entry->seen = 1u; entry->score = (int8_t)a;
             return a;
         }
 
-        ttt_score sc = -(search(nb, -beta, -a, ply + 1));
-        if (sc > a) {
-            a = sc;
-            if (a >= beta) { e->seen = 1u; e->score = (int8_t)a; return a; } // cutoff
+        ttt_score score = -(search(new_board, -beta, -a, ply + 1));
+        if (score > a) {
+            a = score;
+            if (a >= beta) { entry->seen = 1u; entry->score = (int8_t)a; return a; } // cutoff
         }
     }
 
-    e->seen = 1u; e->score = (int8_t)a;
+    entry->seen = 1u; entry->score = (int8_t)a;
     return a;
 }
 
 // ------------------------- Public API -------------------------
 
-bool ttt_is_terminal(Board b, ttt_score *out_score) {
-    uint16_t x = ttt_bits_x(b), o = ttt_bits_o(b);
+bool ttt_is_terminal(Board board, ttt_score *out_score) {
+    uint16_t x = ttt_bits_x(board), o = ttt_bits_o(board);
 
     // If opponent (who just moved) has a 3-in-a-row, side-to-move is losing.
     if (ttt_is_win_bits(o)) {
@@ -200,43 +200,43 @@ bool ttt_is_terminal(Board b, ttt_score *out_score) {
     return false;
 }
 
-int ttt_best_move(Board b) {
+int ttt_best_move(Board board) {
     // Fast-path guard: if terminal or no empties, no move to make
-    if ((ttt_bits_occ(b) == FULL9) ||
-        ttt_is_win_bits(ttt_bits_x(b)) ||
-        ttt_is_win_bits(ttt_bits_o(b))) {
+    if ((ttt_bits_occ(board) == FULL9) ||
+        ttt_is_win_bits(ttt_bits_x(board)) ||
+        ttt_is_win_bits(ttt_bits_o(board))) {
         return -1;
     }
 
-    uint16_t empt = (uint16_t)(~ttt_bits_occ(b) & FULL9);
+    uint16_t empty_squares = (uint16_t)(~ttt_bits_occ(board) & FULL9);
 
     // Immediate tactic: win now, otherwise block opponent
     {
-        uint16_t me  = (ttt_side_to_move(b) == TTT_X) ? ttt_bits_x(b) : ttt_bits_o(b);
-        uint16_t opp = (ttt_side_to_move(b) == TTT_X) ? ttt_bits_o(b) : ttt_bits_x(b);
-        int imm = find_immediate(me, opp);
-        if (imm >= 0) return imm;
+        uint16_t me_bits  = (ttt_side_to_move(board) == TTT_X) ? ttt_bits_x(board) : ttt_bits_o(board);
+        uint16_t opponent_bits = (ttt_side_to_move(board) == TTT_X) ? ttt_bits_o(board) : ttt_bits_x(board);
+        int immediate_move = find_immediate(me_bits, opponent_bits);
+        if (immediate_move >= 0) return immediate_move;
     }
 
     // Explore all legal moves with αβ; pick the max score
-    ttt_score best = INT_MIN / 2;
-    int best_sq = -1;
+    ttt_score best_score = INT_MIN / 2;
+    int best_square = -1;
 
     for (int k = 0; k < 9; ++k) {
-        int sq = ORDER[k];
-        if ((empt & (1u << sq)) == 0u) continue;
+        int square = ORDER[k];
+        if ((empty_squares & (1u << square)) == 0u) continue;
 
-        Board nb = ttt_apply(b, sq);
+        Board new_board = ttt_apply(board, square);
 
         // If this wins immediately, prefer it
-        ttt_score sc = ttt_is_win_bits((ttt_side_to_move(b) == TTT_X) ? ttt_bits_x(nb) : ttt_bits_o(nb))
+        ttt_score score = ttt_is_win_bits((ttt_side_to_move(board) == TTT_X) ? ttt_bits_x(new_board) : ttt_bits_o(new_board))
                      ? win_in(0)
-                     : -(search(nb, INT_MIN / 2, INT_MAX / 2, 1));
+                     : -(search(new_board, INT_MIN / 2, INT_MAX / 2, 1));
 
-        if (sc > best) { best = sc; best_sq = sq; }
+        if (score > best_score) { best_score = score; best_square = square; }
     }
 
-    return best_sq; // Should be valid due to the fast-path guard
+    return best_square; // Should be valid due to the fast-path guard
 }
 
 // ------------------------- Utilities -------------------------
