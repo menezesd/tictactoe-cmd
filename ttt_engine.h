@@ -93,6 +93,25 @@ void ttt_reset_cache(void);
 
 /// @}
 
+/// @name Utilities
+/// @{
+
+/// Return values for ttt_parse_move
+enum {
+    TTT_PARSE_INVALID_FORMAT = -1,
+    TTT_PARSE_OUT_OF_RANGE = -2,
+    TTT_PARSE_EOF = -3,
+};
+
+/**
+ * @brief Parse a move from a string.
+ * @param str The string to parse.
+ * @return The square index (0-8), or a TTT_PARSE_* error code.
+ */
+int ttt_parse_move(const char *str);
+
+/// @}
+
 #ifdef __cplusplus
 }
 #endif
