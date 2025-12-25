@@ -1,28 +1,31 @@
 #include "ttt_engine.h"
-#include <stdio.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
 
 // A simple assertion macro
-#define ASSERT(condition) \
-    do { \
-        if (!(condition)) { \
+#define ASSERT(condition)                                                                                \
+    do {                                                                                                 \
+        if (!(condition)) {                                                                              \
             fprintf(stderr, "Assertion failed: %s, file %s, line %d\n", #condition, __FILE__, __LINE__); \
-            return false; \
-        } \
+            return false;                                                                                \
+        }                                                                                                \
     } while (0)
 
 // Test function signature
 typedef bool (*test_func)(void);
 
-static bool test_draw(void) {
+static bool test_draw(void)
+{
     printf("Running test: %s\n", __func__);
     ttt_reset_cache();
     Board b = ttt_initial();
     for (int ply = 0; ply < 9; ++ply) {
-        if (ttt_is_win_bits(ttt_bits_x(b)) || ttt_is_win_bits(ttt_bits_o(b))) break;
+        if (ttt_is_win_bits(ttt_bits_x(b)) || ttt_is_win_bits(ttt_bits_o(b)))
+            break;
         int mv = ttt_best_move(b);
-        if (mv < 0) break;
+        if (mv < 0)
+            break;
         b = ttt_apply(b, mv);
     }
     ASSERT(!(ttt_bits_x(b) | ttt_bits_o(b)) == 0);
@@ -33,7 +36,8 @@ static bool test_draw(void) {
     return true;
 }
 
-static bool test_forced_win(void) {
+static bool test_forced_win(void)
+{
     printf("Running test: %s\n", __func__);
     ttt_reset_cache();
     Board t = ttt_initial();
@@ -45,12 +49,13 @@ static bool test_forced_win(void) {
     return true;
 }
 
-static bool test_win_conditions(void) {
+static bool test_win_conditions(void)
+{
     printf("Running test: %s\n", __func__);
     const uint16_t WINS[8] = {
         0007u, 0070u, 0700u, // rows
         0111u, 0222u, 0444u, // cols
-        0421u, 0124u        // diags
+        0421u, 0124u // diags
     };
 
     for (size_t i = 0; i < 8; ++i) {
@@ -59,7 +64,8 @@ static bool test_win_conditions(void) {
     return true;
 }
 
-static bool test_move_parser(void) {
+static bool test_move_parser(void)
+{
     printf("Running test: %s\n", __func__);
     ASSERT(ttt_parse_move("0") == 0);
     ASSERT(ttt_parse_move(" 8 ") == 8);
@@ -84,7 +90,8 @@ static test_func tests[] = {
     test_move_parser,
 };
 
-int main(void) {
+int main(void)
+{
     int passed = 0;
     int failed = 0;
 
