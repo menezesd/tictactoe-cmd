@@ -6,15 +6,15 @@
 #include <stdbool.h>
 
 
-static void show_board(Board b){
-    uint16_t x = ttt_bits_x(b), o = ttt_bits_o(b);
+static void show_board(Board board){
+    uint16_t x_bits = ttt_bits_x(board), o_bits = ttt_bits_o(board);
     printf("    a   b   c\n"); // Column coordinates
     puts("  +---+---+---+");
     for (int r = 0; r < 3; ++r) {
         printf("%d |", r + 1); // Row coordinate
         for (int c = 0; c < 3; ++c) {
             int i = r*3 + c;
-            char ch = (x & (1u<<i)) ? 'X' : (o & (1u<<i)) ? 'O' : ' ';
+            char ch = (x_bits & (1u<<i)) ? 'X' : (o_bits & (1u<<i)) ? 'O' : ' ';
             printf(" %c |", ch);
         }
         puts(""); // Newline after each row
@@ -29,32 +29,32 @@ static int read_move(void){
     return ttt_parse_move(buf);
 }
 
-static void usage(const char *prog){
-    fprintf(stderr, "Usage: %s [--ai X|O|none]\n", prog);
+static void usage(const char *program_name){
+    fprintf(stderr, "Usage: %s [--ai X|O|none]\n", program_name);
     fprintf(stderr, "Enter moves as 0..8 or algebraic a1..c3 (a1=top-left)\n");
 }
 
-static int get_human_move(Board b) {
+static int get_human_move(Board board) {
     while (true) {
-        printf("\nPlayer %c, your move (0-8 or a1..c3): ", token(ttt_side_to_move(b)));
+        printf("\nPlayer %c, your move (0-8 or a1..c3): ", token(ttt_side_to_move(board)));
         fflush(stdout);
-        int mv = read_move();
-        if (mv == TTT_PARSE_EOF) { // EOF or read error
+        int move = read_move();
+        if (move == TTT_PARSE_EOF) { // EOF or read error
              return -1; // Internal EOF signal
         }
-        if (mv == TTT_PARSE_INVALID_FORMAT) {
+        if (move == TTT_PARSE_INVALID_FORMAT) {
             fprintf(stderr, "Invalid format. Enter 0-8 or a1-c3.\n");
             continue;
         }
-        if (mv == TTT_PARSE_OUT_OF_RANGE) {
+        if (move == TTT_PARSE_OUT_OF_RANGE) {
             fprintf(stderr, "Move out of range. Enter 0-8 or a1-c3.\n");
             continue;
         }
-        if (!ttt_is_legal(b, mv)) {
+        if (!ttt_is_legal(board, move)) {
             fprintf(stderr, "Illegal move (square occupied or invalid).\n");
             continue;
         }
-        return mv;
+        return move;
     }
 }
 
@@ -64,10 +64,10 @@ static int parse_cli_arguments(int argc, const char *const *argv, ttt_side *ai_p
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--ai") == 0) {
             if (i+1 >= argc) return (usage(argv[0]), 1);
-            const char *v = argv[++i];
-            if (v[0]=='X' || v[0]=='x') { *ai_player = TTT_X; }
-            else if (v[0]=='O' || v[0]=='o' || v[0]=='0') { *ai_player = TTT_O; }
-            else if (v[0]=='n' || v[0]=='N') { /* human vs human, ai_player remains NONE */ }
+            const char *value = argv[++i];
+            if (value[0]=='X' || value[0]=='x') { *ai_player = TTT_X; }
+            else if (value[0]=='O' || value[0]=='o' || value[0]=='0') { *ai_player = TTT_O; }
+            else if (value[0]=='n' || value[0]=='N') { /* human vs human, ai_player remains NONE */ }
             else return (usage(argv[0]), 1);
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             return (usage(argv[0]), 0);
@@ -80,40 +80,40 @@ static int parse_cli_arguments(int argc, const char *const *argv, ttt_side *ai_p
 
 static int run_game(ttt_side ai_player) {
     ttt_reset_cache();
-    Board b = ttt_initial();
+    Board board = ttt_initial();
     bool ai_active = (ai_player != (ttt_side)2); 
 
     printf("Welcome to Tic-Tac-Toe!\n\n");
 
     while (true) {
-        show_board(b);
+        show_board(board);
 
-        ttt_score s;
-        if (ttt_is_terminal(b, &s)) {
+        ttt_score score;
+        if (ttt_is_terminal(board, &score)) {
             printf("\n--- GAME OVER ---\n");
-            if (s == TTT_DRAW) {
+            if (score == TTT_DRAW) {
                 printf("It's a draw!\n");
             } else {
-                printf("Player %c wins!\n", token((ttt_side)((ttt_side_to_move(b)^1))));
+                printf("Player %c wins!\n", token((ttt_side)((ttt_side_to_move(board)^1))));
             }
             printf("-----------------\n");
             break;
         }
 
-        int mv = -1;
-        if (ai_active && ttt_side_to_move(b) == ai_player) {
+        int move = -1;
+        if (ai_active && ttt_side_to_move(board) == ai_player) {
             printf("\nAI is playing...\n");
-            mv = ttt_best_move(b);
-            printf("AI played on square %d\n", mv);
+            move = ttt_best_move(board);
+            printf("AI played on square %d\n", move);
         } else {
-            mv = get_human_move(b);
-            if (mv == -1) { // EOF or read error
+            move = get_human_move(board);
+            if (move == -1) { // EOF or read error
                 printf("\nExiting game.\n");
                 break;
             }
         }
         
-        b = ttt_apply(b, mv);
+        board = ttt_apply(board, move);
     }
     return 0;
 }
