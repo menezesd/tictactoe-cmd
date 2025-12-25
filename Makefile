@@ -1,5 +1,5 @@
 # Makefile for ttt (tic-tac-toe) — C23
-# Files: ttt_engine.c / ttt_cli.c -> binaries: ttt, ttt_debug, ttt_san
+# Files: ttt_engine.c / ttt_cli.c / ttt_test.c -> binaries: ttt, ttt_test
 
 # ---- Toolchain & flags ----
 CC      ?= cc
@@ -12,11 +12,15 @@ LDFLAGS ?=
 SANFLAGS:= -fsanitize=address,undefined -fno-omit-frame-pointer
 
 # ---- Targets ----
-BIN      := ttt
-BIN_DBG  := ttt_debug
-BIN_SAN  := ttt_san
-OBJS     := ttt_engine.o ttt_cli.o
-DEPS     := $(OBJS:.o=.d)
+BIN       := ttt
+BIN_DBG   := ttt_debug
+BIN_SAN   := ttt_san
+BIN_TEST  := ttt_test
+
+OBJS      := ttt_engine.o ttt_cli.o
+OBJS_TEST := ttt_engine.o ttt_test.o
+ALL_OBJS  := $(sort $(OBJS) $(OBJS_TEST))
+DEPS      := $(ALL_OBJS:.o=.d)
 
 .PHONY: all debug san test clean clobber
 
@@ -41,9 +45,12 @@ san: $(BIN_SAN)
 $(BIN_SAN): $(OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
-# Self-test: builds release binary then runs its --selftest
-test: $(BIN)
-	./$(BIN) --selftest
+# Self-test: builds and runs the test binary
+test: $(BIN_TEST)
+	./$(BIN_TEST)
+
+$(BIN_TEST): $(OBJS_TEST)
+	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
 # Pattern rule with auto-deps
 %.o: %.c
@@ -53,8 +60,7 @@ test: $(BIN)
 -include $(DEPS)
 
 clean:
-	$(RM) $(OBJS) $(DEPS)
+	$(RM) $(ALL_OBJS) $(DEPS)
 
 clobber: clean
-	$(RM) $(BIN) $(BIN_DBG) $(BIN_SAN)
-
+	$(RM) $(BIN) $(BIN_DBG) $(BIN_SAN) $(BIN_TEST)
