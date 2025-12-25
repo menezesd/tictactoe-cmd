@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <assert.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -55,12 +56,9 @@ static inline bool      ttt_is_legal(Board b, int sq)    { return (0 <= sq && sq
 /// Apply legal move @p sq and return the new board (asserts legality in debug).
 static inline Board     ttt_apply(Board b, int sq) {
     // Contract: caller must pass a legal square.
-    // (We still branch for side, but the check helps catch bugs early in debug builds.)
-    #include <assert.h>
     assert(ttt_is_legal(b, sq));
-    return (ttt_side_to_move(b) == TTT_X)
-         ? (Board)((b | (1u << (unsigned)sq)) | (1u << 18))   // set X, flip
-         : (Board)(((b | (1u << (9u + (unsigned)sq))) ^ (1u << 18)));
+    unsigned bit_to_set = (ttt_side_to_move(b) == TTT_X) ? (unsigned)sq : 9u + (unsigned)sq;
+    return ttt_flip_side(b | (1u << bit_to_set));
 }
 
 /// Construct the initial position: empty board, X to move.
