@@ -6,22 +6,14 @@
 #include <assert.h>
 #include <limits.h>
 #include <stdalign.h>
+#include <ctype.h>
+#include <stdlib.h>
 
 static_assert(sizeof(uint16_t) * 8 >= 9, "bitfield needs at least 9 bits");
 
 #define FULL9  ((uint16_t)((1u << 9) - 1u))
 
 // ------------------------- Bit utilities -------------------------
-
-static inline int popcount16(uint16_t x) {
-#if defined(__GNUC__) || defined(__clang__)
-    return __builtin_popcount((unsigned)x);
-#else
-    int c = 0;
-    while (x) { x &= (uint16_t)(x - 1u); ++c; }
-    return c;
-#endif
-}
 
 static inline int ctz32(uint32_t x) {
 #if defined(__GNUC__) || defined(__clang__)
@@ -247,3 +239,22 @@ int ttt_best_move(Board b) {
     return best_sq; // Should be valid due to the fast-path guard
 }
 
+// ------------------------- Utilities -------------------------
+
+int ttt_parse_move(const char *str){
+    while (*str && isspace((unsigned char)*str)) ++str;
+    char *end_ptr = NULL;
+    long value = strtol(str, &end_ptr, 10);
+    if (end_ptr != str && (*end_ptr == '\0' || isspace((unsigned char)*end_ptr))) { // It was a number
+        if (value < 0 || value > 8) return TTT_PARSE_OUT_OF_RANGE;
+        return (int)value;
+    }
+
+    // Algebraic input
+    if (((str[0]|32) >= 'a' && (str[0]|32) <= 'c') && (str[1] >= '1' && str[1] <= '3')) {
+        int col = (str[0] | 32) - 'a'; int row = str[1] - '1';
+        return row*3 + col;
+    }
+
+    return TTT_PARSE_INVALID_FORMAT;
+}
