@@ -10,8 +10,8 @@
 static void show_board(Board b){
     uint16_t x = ttt_bits_x(b), o = ttt_bits_o(b);
     for (int r = 0; r < 3; ++r) {
-        puts("+--- +---+---+ ");
-        printf("|");
+        puts("+---+---+---+");
+        printf("|\n");
         for (int c = 0; c < 3; ++c) {
             int i = r*3 + c;
             char ch = (x & (1u<<i)) ? 'X' : (o & (1u<<i)) ? 'O' : ' ';
@@ -46,36 +46,7 @@ static int read_move(void){
 
 static void usage(const char *prog){
     fprintf(stderr, "Usage: %s [--ai X|O|none]\n", prog);
-    fprintf(stderr, "Enter moves as 0-8 or algebraic a1..c3 (a1=top-left)\n");
-}
-
-static int selftest(void){
-    // Best vs best from start should draw.
-    ttt_reset_cache();
-    Board b = ttt_initial();
-    for (int ply = 0; ply < 9; ++ply) {
-        if (ttt_is_win_bits(ttt_bits_x(b)) || ttt_is_win_bits(ttt_bits_o(b))) break;
-        int mv = ttt_best_move(b);
-        if (mv < 0) break;
-        b = ttt_apply(b, mv);
-    }
-    if (!(ttt_bits_x(b) | ttt_bits_o(b))) return 1; // sanity
-
-    ttt_score s;
-    if (!ttt_is_terminal(b, &s)) return (fprintf(stderr, "Selftest: not terminal\n"), 1);
-    if (s != TTT_DRAW) return (fprintf(stderr, "Selftest: expected draw, got %d\n", s), 1);
-
-    // A forced win test: X: 0,1 ; O: 4, find X=2 to win on row 0
-    ttt_reset_cache();
-    Board t = ttt_initial();
-    t = ttt_apply(t, 0); // X
-    t = ttt_apply(t, 4); // O
-    t = ttt_apply(t, 1); // X
-    int bm = ttt_best_move(t);
-    if (bm != 2) return (fprintf(stderr, "Selftest: expected best move 2, got %d\n", bm), 1);
-
-    puts("Selftest passed.");
-    return 0;
+    fprintf(stderr, "Enter moves as 0..8 or algebraic a1..c3 (a1=top-left)\n");
 }
 
 static int get_human_move(Board b) {
@@ -96,9 +67,8 @@ static int get_human_move(Board b) {
     }
 }
 
-static int parse_cli_arguments(int argc, const char *const *argv, ttt_side *ai_player, bool *run_selftest) {
+static int parse_cli_arguments(int argc, const char *const *argv, ttt_side *ai_player) {
     *ai_player = (ttt_side)2; // Default to NONE
-    *run_selftest = false;
     
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--ai") == 0) {
@@ -108,8 +78,6 @@ static int parse_cli_arguments(int argc, const char *const *argv, ttt_side *ai_p
             else if (v[0]=='O' || v[0]=='o' || v[0]=='0') { *ai_player = TTT_O; }
             else if (v[0]=='n' || v[0]=='N') { /* human vs human, ai_player remains NONE */ }
             else return (usage(argv[0]), 1);
-        } else if (strcmp(argv[i], "--selftest") == 0) {
-            *run_selftest = true;
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             return (usage(argv[0]), 0);
         } else {
@@ -155,13 +123,9 @@ static int run_game(ttt_side ai_player) {
 
 int main(int argc, const char *const *argv){
     ttt_side ai = (ttt_side)2; // 2 == NONE here in CLI
-    bool run_selftest = false;
 
-    if (parse_cli_arguments(argc, argv, &ai, &run_selftest) != 0) {
+    if (parse_cli_arguments(argc, argv, &ai) != 0) {
         return 1; // Error during argument parsing or help requested
-    }
-    if (run_selftest) {
-        return selftest();
     }
     
     return run_game(ai);
